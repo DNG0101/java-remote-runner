@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<body style="background:black;color:lime;font-family:monospace">
+
+<h2>Java Online Compiler</h2>
+
+<select id="files"></select>
+<button onclick="load()">Load</button>
+<button onclick="run()">Run</button>
+
+<h3>Input</h3>
+<textarea id="input" rows="6" style="width:100%"></textarea>
+
+<h3>Output</h3>
+<pre id="output"></pre>
+
+<script>
+const API="https://crimson-moon-aa01.donthulanithish53.workers.dev/";
+
+async function list(){
+ let r=await fetch(API+"/list");
+ let d=await r.json();
+ files.innerHTML=d.map(f=>`<option>${f}</option>`).join('');
+}
+
+async function load(){
+ let f=files.value;
+ let r=await fetch(API+"/code?file="+f);
+ output.textContent=await r.text();
+}
+
+async function run(){
+ output.textContent="Running...";
+ let r=await fetch(API+"/run",{
+  method:"POST",
+  headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({file:files.value,input:input.value,args:""})
+ });
+ let {runId}=await r.json();
+ poll(runId);
+}
+
+async function poll(id){
+ let r=await fetch(API+"/output?id="+id);
+ if(r.status==202){
+   setTimeout(()=>poll(id),2500);
+   return;
+ }
+ output.textContent=await r.text();
+}
+
+list();
+</script>
+
+</body>
+</html>
