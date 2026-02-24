@@ -70,66 +70,42 @@ button:hover{
 
 const API = "https://crimson-moon-aa01.donthulanithish53.workers.dev";
 
-// ---------------- LIST FILES ----------------
-async function listFiles(){
-  try{
-    const r = await fetch(API + "/list");
+let collectedInput = "";
 
-    if(!r.ok){
-      output.textContent = "Worker not reachable.\nCheck Worker URL or token.";
-      return;
-    }
+// ---------------- FILE LIST ----------------
+async function list(){
+  let r = await fetch(API + "/list");
+  let d = await r.json();
 
-    const filesList = await r.json();
-
-    if(filesList.length === 0){
-      output.textContent = "No Java files found in /programs folder.";
-      return;
-    }
-
-    const dropdown = document.getElementById("files");
-    dropdown.innerHTML = filesList.map(f=>`<option value="${f}">${f}</option>`).join('');
-
-    output.textContent = "Ready.";
-  }
-  catch(e){
-    output.textContent = "Cannot contact Cloudflare Worker.";
-  }
+  files.innerHTML = d.map(f => `<option>${f}</option>`).join('');
 }
 
-// ---------------- LOAD SOURCE ----------------
+// ---------------- LOAD CODE ----------------
 async function loadCode(){
-
-  const file = document.getElementById("files").value;
-  if(!file) return;
-
-  output.textContent = "Loading source...";
-
-  const r = await fetch(API + "/code?file=" + encodeURIComponent(file));
-  const txt = await r.text();
-
-  document.getElementById("code").value = txt;
-  output.textContent = "Source loaded.";
+  let f = files.value;
+  let r = await fetch(API + "/code?file=" + f);
+  code.value = await r.text();
 }
 
-// ---------------- RUN PROGRAM ----------------
-async function runProgram(){
+// ---------------- RUN ----------------
+async function run(){
 
-  const file = document.getElementById("files").value;
-  if(!file){
-    alert("Select a Java file first");
+  if(!files.value){
+    alert("Select program first");
     return;
   }
 
+  collectedInput = input.value;
+
   output.textContent = "Starting GitHub runner...";
 
-  const r = await fetch(API + "/run",{
+  let r = await fetch(API + "/run",{
     method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({
-      file: file,
-      input: document.getElementById("input").value,
-      args: document.getElementById("args").value
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      file:files.value,
+      input:collectedInput,
+      args:args.value
     })
   });
 
@@ -138,27 +114,47 @@ async function runProgram(){
     return;
   }
 
-  const data = await r.json();
-  output.textContent = "GitHub VM starting...\n(First run takes ~1 minute)";
-  poll(data.runId);
+  let {runId} = await r.json();
+
+  output.textContent =
+  "GitHub VM starting...\n(First run takes ~1 minute)\n";
+
+  poll(runId);
 }
 
-// ---------------- POLLING OUTPUT ----------------
+// ---------------- POLLING ----------------
 async function poll(id){
 
-  const r = await fetch(API + "/output?id=" + id);
+  let r = await fetch(API + "/output?id=" + id);
 
-  if(r.status === 202){
-    setTimeout(()=>poll(id), 3000);
+  if(r.status==202){
+    setTimeout(()=>poll(id),3000);
     return;
   }
 
-  const txt = await r.text();
-  output.textContent = txt;
+  let text = await r.text();
+
+  // ---------- INTERACTIVE DETECTOR ----------
+  // Detect Java waiting for input
+  if(
+      text.includes("Exception in thread") &&
+      text.includes("NoSuchElementException")
+    ){
+
+    let user = prompt("Program is asking for input:");
+
+    if(user!==null){
+      collectedInput += "\n" + user;
+      input.value = collectedInput;
+      run();   // re-run program automatically
+      return;
+    }
+  }
+
+  output.textContent = text;
 }
 
-// start
-listFiles();
+list();
 
 </script>
 
