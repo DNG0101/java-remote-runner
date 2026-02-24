@@ -1,55 +1,119 @@
 <!DOCTYPE html>
 <html>
-<body style="background:black;color:lime;font-family:monospace">
+<head>
+<title>Java Remote Compiler</title>
 
-<h2>Java Online Compiler</h2>
+<style>
+body{
+  background:#000;
+  color:#00ff88;
+  font-family:monospace;
+  padding:20px;
+}
 
+textarea, select, input{
+  width:100%;
+  background:#111;
+  color:#0f0;
+  border:1px solid #0f0;
+  margin-top:5px;
+}
+
+button{
+  background:#003300;
+  color:#0f0;
+  border:1px solid #0f0;
+  padding:6px 12px;
+  margin-top:10px;
+  cursor:pointer;
+}
+
+#output{
+  white-space:pre-wrap;
+  border:1px solid #0f0;
+  padding:10px;
+  margin-top:10px;
+  min-height:120px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Java Online Compiler (GitHub Runner)</h2>
+
+<label>Program</label>
 <select id="files"></select>
-<button onclick="load()">Load</button>
+
+<button onclick="loadCode()">Load</button>
 <button onclick="run()">Run</button>
 
+<h3>Source</h3>
+<textarea id="code" rows="14"></textarea>
+
 <h3>Input</h3>
-<textarea id="input" rows="6" style="width:100%"></textarea>
+<textarea id="input" rows="6"></textarea>
+
+<h3>Arguments</h3>
+<input id="args"/>
 
 <h3>Output</h3>
-<pre id="output"></pre>
+<div id="output">Idle</div>
 
 <script>
+
 const API="https://crimson-moon-aa01.donthulanithish53.workers.dev";
 
+// load file list
 async function list(){
  let r=await fetch(API+"/list");
  let d=await r.json();
  files.innerHTML=d.map(f=>`<option>${f}</option>`).join('');
 }
 
-async function load(){
+// load code
+async function loadCode(){
  let f=files.value;
  let r=await fetch(API+"/code?file="+f);
- output.textContent=await r.text();
+ code.value=await r.text();
 }
 
+// run program
 async function run(){
- output.textContent="Running...";
+
+ output.textContent="Starting runner...";
+
  let r=await fetch(API+"/run",{
   method:"POST",
   headers:{'Content-Type':'application/json'},
-  body:JSON.stringify({file:files.value,input:input.value,args:""})
+  body:JSON.stringify({
+    file:files.value,
+    input:input.value,
+    args:args.value
+  })
  });
+
  let {runId}=await r.json();
+
+ output.textContent="Runner started...\nWaiting for GitHub VM...";
  poll(runId);
 }
 
+// polling
 async function poll(id){
+
  let r=await fetch(API+"/output?id="+id);
+
  if(r.status==202){
-   setTimeout(()=>poll(id),2500);
+   setTimeout(()=>poll(id),3000);
    return;
  }
+
  output.textContent=await r.text();
 }
 
 list();
+
 </script>
 
 </body>
