@@ -4,42 +4,10 @@
 <title>Java Remote Compiler</title>
 
 <style>
-body{
-  background:#000;
-  color:#00ff88;
-  font-family:monospace;
-  padding:20px;
-}
-
-textarea, select, input{
-  width:100%;
-  background:#111;
-  color:#0f0;
-  border:1px solid #0f0;
-  margin-top:5px;
-  padding:6px;
-}
-
-button{
-  background:#003300;
-  color:#0f0;
-  border:1px solid #0f0;
-  padding:6px 12px;
-  margin-top:10px;
-  cursor:pointer;
-}
-
-button:hover{
-  background:#005500;
-}
-
-#output{
-  white-space:pre-wrap;
-  border:1px solid #0f0;
-  padding:10px;
-  margin-top:10px;
-  min-height:160px;
-}
+body{background:#000;color:#00ff88;font-family:monospace;padding:20px}
+textarea,select,input{width:100%;background:#111;color:#0f0;border:1px solid #0f0;margin-top:5px}
+button{background:#003300;color:#0f0;border:1px solid #0f0;padding:6px 12px;margin-top:10px;cursor:pointer}
+#output{white-space:pre-wrap;border:1px solid #0f0;padding:10px;margin-top:10px;min-height:120px}
 </style>
 </head>
 
@@ -50,108 +18,76 @@ button:hover{
 <label>Program</label>
 <select id="files"></select>
 
-<br>
 <button onclick="loadCode()">Load</button>
-<button onclick="runProgram()">Run</button>
+<button onclick="run()">Run</button>
 
 <h3>Source</h3>
-<textarea id="code" rows="14" readonly></textarea>
+<textarea id="code" rows="14"></textarea>
 
-<h3>Input (Scanner / Competitive Programming)</h3>
+<h3>Input</h3>
 <textarea id="input" rows="6"></textarea>
 
-<h3>Arguments (args[])</h3>
+<h3>Arguments</h3>
 <input id="args"/>
 
 <h3>Output</h3>
-<div id="output">Connecting to server...</div>
+<div id="output">Idle</div>
 
 <script>
 
-const API = "https://crimson-moon-aa01.donthulanithish53.workers.dev";
+const API="https://crimson-moon-aa01.donthulanithish53.workers.dev";
 
-let collectedInput = "";
-
-// ---------------- FILE LIST ----------------
+// load file list
 async function list(){
-  let r = await fetch(API + "/list");
-  let d = await r.json();
-
-  files.innerHTML = d.map(f => `<option>${f}</option>`).join('');
+ let r=await fetch(API+"/list");
+ let d=await r.json();
+ files.innerHTML=d.map(f=>`<option>${f}</option>`).join('');
 }
 
-// ---------------- LOAD CODE ----------------
+// load code
 async function loadCode(){
-  let f = files.value;
-  let r = await fetch(API + "/code?file=" + f);
-  code.value = await r.text();
+ let f=files.value;
+ let r=await fetch(API+"/code?file="+f);
+ code.value=await r.text();
 }
 
-// ---------------- RUN ----------------
+// run program
 async function run(){
 
-  if(!files.value){
-    alert("Select program first");
-    return;
-  }
+ if(!files.value){alert("Select file");return;}
 
-  collectedInput = input.value;
+ output.textContent="Starting GitHub runner...";
 
-  output.textContent = "Starting GitHub runner...";
+ let r=await fetch(API+"/run",{
+  method:"POST",
+  headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({
+    file:files.value,
+    input:input.value,
+    args:args.value
+  })
+ });
 
-  let r = await fetch(API + "/run",{
-    method:"POST",
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      file:files.value,
-      input:collectedInput,
-      args:args.value
-    })
-  });
+ if(!r.ok){
+   output.textContent=await r.text();
+   return;
+ }
 
-  if(!r.ok){
-    output.textContent = await r.text();
-    return;
-  }
-
-  let {runId} = await r.json();
-
-  output.textContent =
-  "GitHub VM starting...\n(First run takes ~1 minute)\n";
-
-  poll(runId);
+ let {runId}=await r.json();
+ output.textContent="GitHub VM starting (30-60s first run)...";
+ poll(runId);
 }
 
-// ---------------- POLLING ----------------
+// poll output
 async function poll(id){
+ let r=await fetch(API+"/output?id="+id);
 
-  let r = await fetch(API + "/output?id=" + id);
+ if(r.status==202){
+   setTimeout(()=>poll(id),3000);
+   return;
+ }
 
-  if(r.status==202){
-    setTimeout(()=>poll(id),3000);
-    return;
-  }
-
-  let text = await r.text();
-
-  // ---------- INTERACTIVE DETECTOR ----------
-  // Detect Java waiting for input
-  if(
-      text.includes("Exception in thread") &&
-      text.includes("NoSuchElementException")
-    ){
-
-    let user = prompt("Program is asking for input:");
-
-    if(user!==null){
-      collectedInput += "\n" + user;
-      input.value = collectedInput;
-      run();   // re-run program automatically
-      return;
-    }
-  }
-
-  output.textContent = text;
+ output.textContent=await r.text();
 }
 
 list();
