@@ -81,6 +81,11 @@ async function loadCode(){
 // run program
 async function run(){
 
+ if(!files.value){
+   alert("Select a Java file first");
+   return;
+ }
+
  output.textContent="Starting runner...";
 
  let r=await fetch(API+"/run",{
@@ -93,6 +98,15 @@ async function run(){
   })
  });
 
+ if(!r.ok){
+   output.textContent=await r.text();
+   return;
+ }
+
+ let {runId}=await r.json();
+ output.textContent="GitHub runner started...\nPlease wait 40-60 seconds...";
+ poll(runId);
+}
  let {runId}=await r.json();
 
  output.textContent="Runner started...\nWaiting for GitHub VM...";
