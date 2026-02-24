@@ -4,22 +4,54 @@ on:
   workflow_dispatch:
     inputs:
       filename:
-        description: "Java file name"
         required: true
       inputdata:
-        description: "stdin input"
         required: false
       args:
-        description: "command line args"
         required: false
       run_id:
-        description: "unique id"
         required: true
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
   run-java:
     runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Compile
+        run: |
+          cd programs
+          javac "${{ github.event.inputs.filename }}"
+
+      - name: Run
+        run: |
+          cd programs
+
+          CLASS=$(basename "${{ github.event.inputs.filename }}" .java)
+
+          echo "${{ github.event.inputs.inputdata }}" > input.txt
+
+          timeout 10s java $CLASS ${{ github.event.inputs.args }} < input.txt > output.txt 2>&1 || echo "Runtime error or timeout" >> output.txt
+
+      - name: Save output
+        run: |
+          mkdir -p outputs
+          cp programs/output.txt outputs/${{ github.event.inputs.run_id }}.txt
+
+      - name: Commit output
+        run: |
+          git config user.name runner
+          git config user.email runner@github.com
+          git add outputs/
+          git commit -m "run ${{ github.event.inputs.run_id }}" || echo "nothing"
+          git push
