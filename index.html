@@ -17,6 +17,7 @@ textarea, select, input{
   color:#0f0;
   border:1px solid #0f0;
   margin-top:5px;
+  padding:6px;
 }
 
 button{
@@ -28,12 +29,16 @@ button{
   cursor:pointer;
 }
 
+button:hover{
+  background:#005500;
+}
+
 #output{
   white-space:pre-wrap;
   border:1px solid #0f0;
   padding:10px;
   margin-top:10px;
-  min-height:120px;
+  min-height:160px;
 }
 </style>
 </head>
@@ -45,88 +50,115 @@ button{
 <label>Program</label>
 <select id="files"></select>
 
+<br>
 <button onclick="loadCode()">Load</button>
-<button onclick="run()">Run</button>
+<button onclick="runProgram()">Run</button>
 
 <h3>Source</h3>
-<textarea id="code" rows="14"></textarea>
+<textarea id="code" rows="14" readonly></textarea>
 
-<h3>Input</h3>
+<h3>Input (Scanner / Competitive Programming)</h3>
 <textarea id="input" rows="6"></textarea>
 
-<h3>Arguments</h3>
+<h3>Arguments (args[])</h3>
 <input id="args"/>
 
 <h3>Output</h3>
-<div id="output">Idle</div>
+<div id="output">Connecting to server...</div>
 
 <script>
 
 const API = "https://crimson-moon-aa01.donthulanithish53.workers.dev";
 
-// load file list
-async function list(){
- let r=await fetch(API+"/list");
- let d=await r.json();
- files.innerHTML=d.map(f=>`<option>${f}</option>`).join('');
+// ---------------- LIST FILES ----------------
+async function listFiles(){
+  try{
+    const r = await fetch(API + "/list");
+
+    if(!r.ok){
+      output.textContent = "Worker not reachable.\nCheck Worker URL or token.";
+      return;
+    }
+
+    const filesList = await r.json();
+
+    if(filesList.length === 0){
+      output.textContent = "No Java files found in /programs folder.";
+      return;
+    }
+
+    const dropdown = document.getElementById("files");
+    dropdown.innerHTML = filesList.map(f=>`<option value="${f}">${f}</option>`).join('');
+
+    output.textContent = "Ready.";
+  }
+  catch(e){
+    output.textContent = "Cannot contact Cloudflare Worker.";
+  }
 }
 
-// load code
+// ---------------- LOAD SOURCE ----------------
 async function loadCode(){
- let f=files.value;
- let r=await fetch(API+"/code?file="+f);
- code.value=await r.text();
+
+  const file = document.getElementById("files").value;
+  if(!file) return;
+
+  output.textContent = "Loading source...";
+
+  const r = await fetch(API + "/code?file=" + encodeURIComponent(file));
+  const txt = await r.text();
+
+  document.getElementById("code").value = txt;
+  output.textContent = "Source loaded.";
 }
 
-// run program
-async function run(){
+// ---------------- RUN PROGRAM ----------------
+async function runProgram(){
 
- if(!files.value){
-   alert("Select a Java file first");
-   return;
- }
+  const file = document.getElementById("files").value;
+  if(!file){
+    alert("Select a Java file first");
+    return;
+  }
 
- output.textContent="Starting runner...";
+  output.textContent = "Starting GitHub runner...";
 
- let r=await fetch(API+"/run",{
-  method:"POST",
-  headers:{'Content-Type':'application/json'},
-  body:JSON.stringify({
-    file:files.value,
-    input:input.value,
-    args:args.value
-  })
- });
+  const r = await fetch(API + "/run",{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      file: file,
+      input: document.getElementById("input").value,
+      args: document.getElementById("args").value
+    })
+  });
 
- if(!r.ok){
-   output.textContent=await r.text();
-   return;
- }
+  if(!r.ok){
+    output.textContent = await r.text();
+    return;
+  }
 
- let {runId}=await r.json();
- output.textContent="GitHub runner started...\nPlease wait 40-60 seconds...";
- poll(runId);
-}
- let {runId}=await r.json();
-
- output.textContent="Runner started...\nWaiting for GitHub VM...";
- poll(runId);
+  const data = await r.json();
+  output.textContent = "GitHub VM starting...\n(First run takes ~1 minute)";
+  poll(data.runId);
 }
 
-// polling
+// ---------------- POLLING OUTPUT ----------------
 async function poll(id){
 
- let r=await fetch(API+"/output?id="+id);
+  const r = await fetch(API + "/output?id=" + id);
 
- if(r.status==202){
-   setTimeout(()=>poll(id),3000);
-   return;
- }
+  if(r.status === 202){
+    setTimeout(()=>poll(id), 3000);
+    return;
+  }
 
- output.textContent=await r.text();
+  const txt = await r.text();
+  output.textContent = txt;
 }
 
-list();
+// start
+listFiles();
 
 </script>
 
