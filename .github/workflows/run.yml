@@ -1,0 +1,61 @@
+name: Java Runner
+
+on:
+  workflow_dispatch:
+    inputs:
+      filename:
+        description: "Java file name"
+        required: true
+      inputdata:
+        description: "stdin input"
+        required: false
+      args:
+        description: "command line args"
+        required: false
+      run_id:
+        description: "unique id"
+        required: true
+
+jobs:
+  run-java:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Prepare
+        run: |
+          mkdir work
+          cp programs/${{ github.event.inputs.filename }} work/Main.java
+
+      - name: Compile
+        run: |
+          cd work
+          javac Main.java
+
+      - name: Run program
+        run: |
+          cd work
+          echo "${{ github.event.inputs.inputdata }}" > input.txt
+          java Main ${{ github.event.inputs.args }} < input.txt > output.txt 2>&1
+
+      - name: Save Output
+        run: |
+          mkdir -p outputs
+          cp work/output.txt outputs/${{ github.event.inputs.run_id }}.txt
+
+      - name: Commit Output
+        run: |
+          git config user.name "runner"
+          git config user.email "runner@github.com"
+          git add outputs/
+          git commit -m "output ${{ github.event.inputs.run_id }}" || echo "no changes"
+          git push
