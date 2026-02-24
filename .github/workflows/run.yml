@@ -21,47 +21,57 @@ jobs:
 
     steps:
 
-    # IMPORTANT: allow push
-    - name: Checkout repository
+    - name: Checkout repo
       uses: actions/checkout@v4
-      with:
-        persist-credentials: true
-        fetch-depth: 0
 
-    - name: Setup Java
+    - name: Install Java
       uses: actions/setup-java@v4
       with:
         distribution: temurin
         java-version: 17
 
-    - name: Compile
+    # -------------------------------
+    # CREATE EXECUTION SANDBOX
+    # -------------------------------
+    - name: Prepare sandbox
       run: |
-        cd programs
-        javac "${{ github.event.inputs.filename }}"
+        mkdir runner
+        cp programs/${{ github.event.inputs.filename }} runner/Main.java
 
-    - name: Run Program
+    # -------------------------------
+    # COMPILE
+    # -------------------------------
+    - name: Compile program
       run: |
-        cd programs
+        cd runner
+        javac Main.java
 
-        CLASS=$(basename "${{ github.event.inputs.filename }}" .java)
+    # -------------------------------
+    # RUN PROGRAM
+    # -------------------------------
+    - name: Execute program
+      run: |
+        cd runner
 
         echo "${{ github.event.inputs.inputdata }}" > input.txt
 
-        timeout 20s java $CLASS ${{ github.event.inputs.args }} < input.txt > output.txt 2>&1 || echo "Runtime error or timeout" >> output.txt
+        timeout 20s java Main ${{ github.event.inputs.args }} < input.txt > output.txt 2>&1 || echo "Runtime Error / Time Limit Exceeded" > output.txt
 
-    - name: Save Output
+    # -------------------------------
+    # SAVE OUTPUT
+    # -------------------------------
+    - name: Save output
       run: |
         mkdir -p outputs
-        cp programs/output.txt outputs/${{ github.event.inputs.run_id }}.txt
+        cp runner/output.txt outputs/${{ github.event.inputs.run_id }}.txt
 
-    # THIS PART FIXES EVERYTHING
-    - name: Commit and Push Output
+    # -------------------------------
+    # COMMIT OUTPUT BACK
+    # -------------------------------
+    - name: Push result
       run: |
-        git config --global user.name "github-actions"
-        git config --global user.email "actions@github.com"
-
+        git config user.name "github-runner"
+        git config user.email "runner@github.com"
         git add outputs/
-
-        git commit -m "runner output ${{ github.event.inputs.run_id }}" || echo "No changes"
-
-        git push origin HEAD:main
+        git commit -m "run ${{ github.event.inputs.run_id }}" || echo "No changes"
+        git push
