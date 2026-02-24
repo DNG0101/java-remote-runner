@@ -4,74 +4,71 @@ on:
   workflow_dispatch:
     inputs:
       filename:
+        description: "Java file"
         required: true
       inputdata:
+        description: "stdin"
         required: false
       args:
+        description: "args"
         required: false
       run_id:
+        description: "unique id"
         required: true
 
+# VERY IMPORTANT (without this push will fail)
 permissions:
   contents: write
+  actions: write
 
 jobs:
   run-java:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Checkout repo
-      uses: actions/checkout@v4
+      - name: Install Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
 
-    - name: Install Java
-      uses: actions/setup-java@v4
-      with:
-        distribution: temurin
-        java-version: 17
+      # ---------- COMPILE ----------
+      - name: Compile
+        run: |
+          cd programs
+          javac "${{ github.event.inputs.filename }}"
 
-    # -------------------------------
-    # CREATE EXECUTION SANDBOX
-    # -------------------------------
-    - name: Prepare sandbox
-      run: |
-        mkdir runner
-        cp programs/${{ github.event.inputs.filename }} runner/Main.java
+      # ---------- RUN ----------
+      - name: Execute
+        run: |
+          cd programs
+          CLASS=$(basename "${{ github.event.inputs.filename }}" .java)
 
-    # -------------------------------
-    # COMPILE
-    # -------------------------------
-    - name: Compile program
-      run: |
-        cd runner
-        javac Main.java
+          # create stdin
+          echo "${{ github.event.inputs.inputdata }}" > input.txt
 
-    # -------------------------------
-    # RUN PROGRAM
-    # -------------------------------
-    - name: Execute program
-      run: |
-        cd runner
+          # run program
+          timeout 15s java $CLASS ${{ github.event.inputs.args }} < input.txt > output.txt 2>&1 || echo "Runtime error / timeout" >> output.txt
 
-        echo "${{ github.event.inputs.inputdata }}" > input.txt
+      # ---------- SAVE OUTPUT ----------
+      - name: Save output
+        run: |
+          mkdir -p outputs
+          cp programs/output.txt outputs/${{ github.event.inputs.run_id }}.txt
 
-        timeout 20s java Main ${{ github.event.inputs.args }} < input.txt > output.txt 2>&1 || echo "Runtime Error / Time Limit Exceeded" > output.txt
+      # ---------- PUSH OUTPUT (THE MAGIC STEP) ----------
+      - name: Push output back to repo
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
 
-    # -------------------------------
-    # SAVE OUTPUT
-    # -------------------------------
-    - name: Save output
-      run: |
-        mkdir -p outputs
-        cp runner/output.txt outputs/${{ github.event.inputs.run_id }}.txt
+          git add outputs/
 
-    # -------------------------------
-    # COMMIT OUTPUT BACK
-    # -------------------------------
-    - name: Push result
-      run: |
-        git config user.name "github-runner"
-        git config user.email "runner@github.com"
-        git add outputs/
-        git commit -m "run ${{ github.event.inputs.run_id }}" || echo "No changes"
-        git push
+          git commit -m "run ${{ github.event.inputs.run_id }}" || echo "nothing"
+
+          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} HEAD:main
